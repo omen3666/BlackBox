@@ -33,6 +33,7 @@ Download and run:
 
 ```bash
 wget https://github.com/omen3666/BlackBox/raw/refs/heads/main/blackbox_download_and_run.sh
+chmod +x blackbox_download_and_run.sh
 ./blackbox_download_and_run.sh
 ```
 
