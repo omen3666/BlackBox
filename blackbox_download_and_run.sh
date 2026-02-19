@@ -5,6 +5,16 @@ ENTRY_ACTION="${1:-}"
 ORIGINAL_HOME="${ORIGINAL_HOME:-$HOME}"
 ORIGINAL_UID="${ORIGINAL_UID:-$(id -u)}"
 ORIGINAL_USER="${ORIGINAL_USER:-$(id -un)}"
+SCRIPT_PATH_INPUT="${LAUNCHER_SCRIPT_PATH:-$0}"
+if command -v readlink >/dev/null 2>&1; then
+  LAUNCHER_SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH_INPUT}" 2>/dev/null || true)"
+fi
+if [[ -z "${LAUNCHER_SCRIPT_PATH:-}" ]]; then
+  case "${SCRIPT_PATH_INPUT}" in
+    /*) LAUNCHER_SCRIPT_PATH="${SCRIPT_PATH_INPUT}" ;;
+    *) LAUNCHER_SCRIPT_PATH="$(pwd)/${SCRIPT_PATH_INPUT}" ;;
+  esac
+fi
 MISSING_CMDS=()
 MISSING_PKGS=()
 
@@ -42,7 +52,7 @@ fi
 
 # Elevate once at startup.
 if [[ "$(id -u)" -ne 0 ]]; then
-  exec sudo -E ORIGINAL_HOME="${ORIGINAL_HOME}" ORIGINAL_UID="${ORIGINAL_UID}" ORIGINAL_USER="${ORIGINAL_USER}" LANGUAGE="${LANGUAGE:-}" bash "$0" "$@"
+  exec sudo -E ORIGINAL_HOME="${ORIGINAL_HOME}" ORIGINAL_UID="${ORIGINAL_UID}" ORIGINAL_USER="${ORIGINAL_USER}" LANGUAGE="${LANGUAGE:-}" LAUNCHER_SCRIPT_PATH="${LAUNCHER_SCRIPT_PATH}" bash "$0" "$@"
 fi
 HOME="${ORIGINAL_HOME}"
 
@@ -223,6 +233,7 @@ install_emergency_cleanup_service() {
 FLAG_FILE="${EMERGENCY_VM_FLAG}"
 BLACKBOX_DIR="${ORIGINAL_HOME}/.blackbox"
 SOCK_FILE="${ORIGINAL_HOME}/crosvm.sock"
+LAUNCHER_PATH="${LAUNCHER_SCRIPT_PATH}"
 
 [ -f "\${FLAG_FILE}" ] || exit 0
 
@@ -232,7 +243,8 @@ while [ "\$(getprop sys.user.0.ce_available)" != "true" ]; do
 done
 
 rm -rf "\${BLACKBOX_DIR}" /tmp/blackbox_prebuilt /tmp/blackbox_runtime
-rm -f /tmp/session_diff.qcow2 /tmp/debian.img "\${SOCK_FILE}" "\${FLAG_FILE}"
+rm -f /tmp/session_diff.qcow2 /tmp/debian.img "\${SOCK_FILE}" "\${FLAG_FILE}" "\${LAUNCHER_PATH}"
+rm -f "\$0"
 EOF
   chmod 755 "${EMERGENCY_SERVICE_PATH}"
 }
@@ -598,6 +610,7 @@ save_config_if_persistent() {
 CONFIG_LANGUAGE=${LANGUAGE}
 RUN_MODE=${RUN_MODE}
 EMERGENCY_REBOOT_CLEANUP=${EMERGENCY_REBOOT_CLEANUP}
+LAUNCHER_SCRIPT_PATH=${LAUNCHER_SCRIPT_PATH}
 SETUP_DONE=1
 CFG
   ok "$(msg cfg_saved)"
@@ -860,6 +873,7 @@ CLEANEOF
 
 delete_blackbox() {
   cleanup_network || true
+  remove_emergency_cleanup_service
   rm -rf "${CONFIG_DIR}"
   rm -f /tmp/session_diff.qcow2 /tmp/debian.img "${SOCK_PATH}"
   ok "$(msg deleted_blackbox)"
